@@ -1,0 +1,10 @@
+{
+  "name": "1inch-swap-contract",
+  "version": "1.0.0",
+  "main": "index.js",
+  "author": "nrjwolf <nrjwolf@gmail.com>",
+  "license": "MIT",
+  "dependencies": {
+    "truffle": "^5.5.13"
+  }
+}
