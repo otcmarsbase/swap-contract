@@ -8,24 +8,31 @@ import "./../interfaces/IUniswapV2Factory.sol";
 import "./../interfaces/IMarsbaseSink.sol";
 import "./../interfaces/IMarsbaseTreasury.sol";
 
-contract BCSSwap is IMarsbaseSink, IMarsbaseTreasury {
-    address internal constant PANCAKE_FACTORY_ADDRESS =
-        0xcA143Ce32Fe78f1f7019d7d551a6402fC5350c73;
-    address internal constant PANCAKE_ROUTER_ADDRESS =
-        0x10ED43C718714eb63d5aA57B78B54704E256024E;
+contract MarsbaseSwap is IMarsbaseSink, IMarsbaseTreasury {
+    address internal FACTORY_ADDRESS;
+    address internal ROUTER_ADDRESS;
 
-    IUniswapV2Factory public pancakeFactory;
-    IUniswapV2Router02 public pancakeRouter;
+    IUniswapV2Factory public factory;
+    IUniswapV2Router02 public router;
     address private owner;
 
     address private WETH;
-    address private TOKEN_OUT = 0x55d398326f99059fF775485246999027B3197955; // BSC mainnet USDT
+    address private TOKEN_OUT; // Etherium mainnet USDT
 
-    constructor() {
+    constructor(
+        address routerAddress,
+        address factoryAddress,
+        address tokenOut
+    ) {
         owner = address(msg.sender);
-        pancakeRouter = IUniswapV2Router02(PANCAKE_ROUTER_ADDRESS);
-        pancakeFactory = IUniswapV2Factory(PANCAKE_FACTORY_ADDRESS);
-        WETH = pancakeRouter.WETH();
+
+        ROUTER_ADDRESS = routerAddress;
+        FACTORY_ADDRESS = factoryAddress;
+
+        router = IUniswapV2Router02(routerAddress);
+        factory = IUniswapV2Factory(factoryAddress);
+        TOKEN_OUT = tokenOut;
+        WETH = router.WETH();
     }
 
     function takeAndSwap(
@@ -40,13 +47,13 @@ contract BCSSwap is IMarsbaseSink, IMarsbaseTreasury {
         );
 
         require(
-            IERC20(token).approve(PANCAKE_ROUTER_ADDRESS, amount),
+            IERC20(token).approve(ROUTER_ADDRESS, amount),
             "approve failed."
         );
 
-        address pair = pancakeFactory.getPair(token, TOKEN_OUT);
+        address pair = factory.getPair(token, TOKEN_OUT);
         if (pair != 0x0000000000000000000000000000000000000000) {
-            pancakeRouter.swapExactTokensForTokens(
+            router.swapExactTokensForTokens(
                 amount,
                 0,
                 getPath(token),
