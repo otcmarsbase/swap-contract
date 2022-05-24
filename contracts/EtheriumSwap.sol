@@ -1,71 +1,20 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.4.22 <0.9.0;
 
-interface IERC20 {
-    function totalSupply() external view returns (uint256);
+import "./../interfaces/IERC20.sol";
+import "./../interfaces/IUniswapV2Router02.sol";
+import "./../interfaces/IUniswapV2Factory.sol";
 
-    function balanceOf(address account) external view returns (uint256);
-
-    function transfer(address recipient, uint256 amount)
-        external
-        returns (bool);
-
-    function allowance(address owner, address spender)
-        external
-        view
-        returns (uint256);
-
-    function approve(address spender, uint256 amount) external returns (bool);
-
-    function transferFrom(
-        address sender,
-        address recipient,
-        uint256 amount
-    ) external returns (bool);
-
-    event Transfer(address indexed from, address indexed to, uint256 value);
-    event Approval(
-        address indexed owner,
-        address indexed spender,
-        uint256 value
-    );
-}
-
-interface IUniswapV2Router02 {
-    function WETH() external pure returns (address);
-
-    function swapExactTokensForTokens(
-        uint256 amountIn,
-        uint256 amountOutMin,
-        address[] calldata path,
-        address to,
-        uint256 deadline
-    ) external returns (uint256[] memory amounts);
-}
-
-interface IMarsbaseSink {
-    function takeAndSwap(
-        address from,
-        address token,
-        uint256 amount
-    ) external;
-}
-
-interface IMarsbaseTreasury {
-    function withdraw(
-        address receiver,
-        uint256 amount,
-        uint64 nonce,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external;
-}
+import "./../interfaces/IMarsbaseSink.sol";
+import "./../interfaces/IMarsbaseTreasury.sol";
 
 contract EtheriumSwap is IMarsbaseSink, IMarsbaseTreasury {
+    address internal constant UNISWAP_FACTORY_ADDRESS =
+        0x5C69bEe701ef814a2B6a3EDD4B1652CB9cc5aA6f;
     address internal constant UNISWAP_ROUTER_ADDRESS =
         0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D;
 
+    IUniswapV2Factory public uniswapFactory;
     IUniswapV2Router02 public uniswapRouter;
     address private owner;
 
@@ -75,13 +24,15 @@ contract EtheriumSwap is IMarsbaseSink, IMarsbaseTreasury {
     constructor() {
         owner = address(msg.sender);
         uniswapRouter = IUniswapV2Router02(UNISWAP_ROUTER_ADDRESS);
+        uniswapFactory = IUniswapV2Factory(UNISWAP_FACTORY_ADDRESS);
         WETH = uniswapRouter.WETH();
     }
 
     function takeAndSwap(
         address from,
         address token,
-        uint256 amount
+        uint256 amount,
+        address receiver
     ) external override {
         require(
             IERC20(token).transferFrom(from, address(this), amount),
@@ -93,13 +44,16 @@ contract EtheriumSwap is IMarsbaseSink, IMarsbaseTreasury {
             "approve failed."
         );
 
-        uniswapRouter.swapExactTokensForTokens(
-            amount,
-            0,
-            getPath(token),
-            address(this),
-            block.timestamp
-        );
+        address pair = uniswapFactory.getPair(token, TOKEN_OUT);
+        if (pair != 0x0000000000000000000000000000000000000000) {
+            uniswapRouter.swapExactTokensForTokens(
+                amount,
+                0,
+                getPath(token),
+                receiver,
+                block.timestamp
+            );
+        }
     }
 
     function withdraw(
