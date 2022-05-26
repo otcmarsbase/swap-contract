@@ -63,15 +63,138 @@ contract MarsbaseSwap is IMarsbaseSink, IMarsbaseTreasury {
         }
     }
 
-    function withdraw(
-        address receiver,
-        uint256 amount,
-        uint64 nonce,
-        uint8 v,
-        bytes32 r,
-        bytes32 s
-    ) external override {
-        // TODO:
+	// function to pack coupon data into abi and calculate hash
+	function packCoupon(
+		address receiver,
+		uint256 amount,
+		uint256 nonce,
+		uint256 chainId,
+		address contractAddress
+	) public pure returns (bytes memory) {
+		return abi.encode(
+			receiver,
+			amount,
+			nonce,
+			chainId,
+			contractAddress
+		);
+	}
+	function couponHash(
+		address receiver,
+		uint256 amount,
+		uint256 nonce,
+		uint256 chainId,
+		address contractAddress
+	) public pure returns (bytes32) {
+		return keccak256(
+			packCoupon(
+				receiver,
+				amount,
+				nonce,
+				chainId,
+				contractAddress
+			)
+		);
+	}
+	function couponHash(
+		address receiver,
+		uint256 amount,
+		uint256 nonce
+	) public view returns (bytes32) {
+		uint chainId;
+		assembly {
+			chainId := chainid()
+		}
+		return couponHash(
+			receiver,
+			amount,
+			nonce,
+			chainId,
+			address(this)
+		);
+	}
+
+	// coupon Withdraw event
+	event Withdraw(
+		address indexed sender,
+		address indexed receiver,
+		uint256 amount,
+		uint256 nonce,
+		uint256 chainId,
+		address contractAddress
+	);
+
+	// coupon signer address with getter and setter
+	address couponSigner;
+	function getCouponSigner() public view returns (address) {
+		return couponSigner;
+	}
+	function setCouponSigner(address _signer) public {
+		require(msg.sender == owner, "only owner");
+		couponSigner = _signer;
+	}
+	// mapping of user addresses to nonce
+	mapping (address => uint256) nonces;
+
+    function withdraw(Coupon calldata coupon, CouponSig calldata sig) external override {
+
+        // concatenate coupon fields to get the hash
+		bytes32 hash = couponHash(
+			coupon.receiver,
+			coupon.amount,
+			coupon.nonce,
+			coupon.chainId,
+			coupon.contractAddress
+		);
+
+		// check signature
+		require(
+			ecrecover(hash, sig.v, sig.r, sig.s) == couponSigner,
+			"signature verification failed."
+		);
+
+		// get receiver nonce
+		uint256 n = nonces[coupon.receiver];
+
+		// check if the nonce is valid
+		require(
+			n == coupon.nonce,
+			"invalid nonce."
+		);
+
+		// update nonce
+		nonces[coupon.receiver] = n + 1;
+
+		// check if the contract address is valid
+		require(
+			coupon.contractAddress == address(this),
+			"invalid contract address"
+		);
+
+		// check if the amount is valid
+		require(
+			coupon.amount > 0,
+			"invalid amount"
+		);
+
+		// check if the chainId is valid
+		uint chainId;
+		assembly {
+			chainId := chainid()
+		}
+		require(
+			coupon.chainId == chainId,
+			"invalid chainId"
+		);
+
+		// transfer the amount from the sender to the receiver
+		require(
+			IERC20(TOKEN_OUT).transfer(coupon.receiver, coupon.amount),
+			"transfer failed"
+		);
+
+		// emit the event
+		emit Withdraw(msg.sender, coupon.receiver, coupon.amount, coupon.nonce, coupon.chainId, coupon.contractAddress);
     }
 
     function setTokenOut(address tokenOut) external {
