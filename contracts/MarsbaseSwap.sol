@@ -35,7 +35,7 @@ contract MarsbaseSwap is IMarsbaseSink, IMarsbaseTreasury {
         WETH = router.WETH();
     }
 
-    function takeAndSwap(
+    function liquidateToken(
         address from,
         address token,
         uint256 amount,
